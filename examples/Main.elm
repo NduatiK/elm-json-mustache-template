@@ -6,12 +6,12 @@ import Html.Attributes exposing (style)
 
 -- third party
 
-import Json.Print
+import Json.Mustache
 
 main =
     textarea [ style "min-width" "45em" , style "min-height" "24em"  ] 
         [ text <| Result.withDefault "" (
-            Json.Print.prettyString { columns = 0, indent = 4, delimiter = '/' } exampleJsonInput
+            Json.Mustache.prettyString { columns = 0, indent = 4, delimiter = '/' } exampleJsonInput
             )
         ]
 
