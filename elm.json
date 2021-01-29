@@ -1,6 +1,6 @@
 {
     "type": "package",
-    "name": "ThinkAlexandria/elm-pretty-print-json",
+    "name": "NduatiK/elm-json-mustache-template",
     "summary": "Pretty print JSON with nesting indents into a String",
     "license": "BSD-3-Clause",
     "version": "1.0.1",
