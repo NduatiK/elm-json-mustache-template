@@ -1,4 +1,4 @@
-module Json.Print exposing (Config, prettyString, prettyValue)
+module Json.Mustache exposing (Config, prettyString, prettyValue)
 
 {-| Pretty print JSON stored as a `String` or `Json.Encode.Value`
 
