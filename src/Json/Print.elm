@@ -11,6 +11,7 @@ module Json.Print exposing (Config, prettyString, prettyValue)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode exposing (Value)
 import Pretty exposing (Doc, align, append, char, hang, join, line, nest, softline, space, string, surround)
+import Result
 
 
 
@@ -66,18 +67,9 @@ stringToDoc s =
     surround (char '"') (char '"') (string s)
 
 
-numberToDoc : Float -> Doc
-numberToDoc num =
-    string (String.fromFloat num)
-
-
-boolToDoc : Bool -> Doc
-boolToDoc bool =
-    if bool then
-        string "true"
-
-    else
-        string "false"
+encodeMustache : String -> a -> Doc
+encodeMustache parentKeyPath _ =
+    surround (string "{{") (string "}}") (string parentKeyPath)
 
 
 objectToDoc : Int -> List ( String, Doc ) -> Doc
@@ -126,17 +118,64 @@ listToDoc indent list =
 -- DECODE
 
 
-decodeDoc : Int -> Decoder Doc
-decodeDoc indent =
+decodeDoc : Int -> Char -> String -> Decoder Doc
+decodeDoc indent delimiter parentKeyPath =
     Decode.map
         nullToDoc
         (Decode.maybe
             (Decode.oneOf
-                [ Decode.map stringToDoc Decode.string
-                , Decode.map numberToDoc Decode.float
-                , Decode.map boolToDoc Decode.bool
-                , Decode.map (listToDoc indent) (Decode.lazy (\_ -> Decode.list (decodeDoc indent)))
-                , Decode.map (objectToDoc indent) (Decode.lazy (\_ -> Decode.keyValuePairs (decodeDoc indent)))
+                [ Decode.map (encodeMustache parentKeyPath) Decode.string
+                , Decode.map (encodeMustache parentKeyPath) Decode.float
+                , Decode.map (encodeMustache parentKeyPath) Decode.bool
+                , Decode.map (listToDoc indent) (Decode.lazy (\_ -> Decode.list (decodeDoc indent delimiter parentKeyPath)))
+                , Decode.map (objectToDoc indent)
+                    (Decode.lazy
+                        (\_ ->
+                            Decode.keyValuePairs Decode.value
+                                |> Decode.andThen
+                                    (\keyValues ->
+                                        let
+                                            decodingResult =
+                                                keyValues
+                                                    |> List.map
+                                                        (\( k, v ) ->
+                                                            ( k, Decode.decodeValue (decodeDoc indent delimiter (parentKeyPath ++ String.fromChar delimiter ++ k)) v )
+                                                        )
+
+                                            valid : List ( String, Doc )
+                                            valid =
+                                                decodingResult
+                                                    |> List.concatMap
+                                                        (\( k, v ) ->
+                                                            case v of
+                                                                Ok value ->
+                                                                    [ ( k, value ) ]
+
+                                                                Err _ ->
+                                                                    []
+                                                        )
+
+                                            invalid =
+                                                decodingResult
+                                                    |> List.concatMap
+                                                        (\( k, v ) ->
+                                                            case v of
+                                                                Ok _ ->
+                                                                    []
+
+                                                                Err e ->
+                                                                    [ ( k, v, e ) ]
+                                                        )
+                                                    |> Debug.log ""
+                                        in
+                                        if invalid /= [] then
+                                            Decode.fail ""
+
+                                        else
+                                            Decode.succeed valid
+                                    )
+                        )
+                    )
                 ]
             )
         )
@@ -159,6 +198,7 @@ unbounded.
 type alias Config =
     { indent : Int
     , columns : Int
+    , delimiter : Char
     }
 
 
@@ -167,8 +207,8 @@ passes the string through `Json.Decode.decodeString` and bubbles up any JSON
 parsing errors.
 -}
 prettyString : Config -> String -> Result String String
-prettyString { columns, indent } json =
-    Decode.decodeString (decodeDoc indent) json
+prettyString { columns, indent, delimiter } json =
+    Decode.decodeString (decodeDoc indent delimiter "") json
         |> Result.map (Pretty.pretty columns)
         |> Result.mapError Decode.errorToString
 
@@ -177,7 +217,7 @@ prettyString { columns, indent } json =
 `Json.Decode.decodeValue` and bubbles up any JSON parsing errors.
 -}
 prettyValue : Config -> Value -> Result String String
-prettyValue { columns, indent } json =
-    Decode.decodeValue (decodeDoc indent) json
+prettyValue { columns, indent, delimiter } json =
+    Decode.decodeValue (decodeDoc indent delimiter "") json
         |> Result.map (Pretty.pretty columns)
         |> Result.mapError Decode.errorToString
