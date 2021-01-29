@@ -52,14 +52,18 @@ closeBracket =
 -- CONVERT
 
 
-nullToDoc : Maybe Doc -> Doc
-nullToDoc maybeDoc =
+nullToDoc : String -> Maybe Doc -> Doc
+nullToDoc parentKeyPath maybeDoc =
     case maybeDoc of
         Just doc ->
             doc
 
         Nothing ->
-            string "null"
+            if String.isEmpty parentKeyPath  then
+                string "null"
+            else 
+                surround (string "{{") (string "}}") (string parentKeyPath)
+
 
 
 stringToDoc : String -> Doc
@@ -121,7 +125,7 @@ listToDoc indent list =
 decodeDoc : Int -> Char -> String -> Decoder Doc
 decodeDoc indent delimiter parentKeyPath =
     Decode.map
-        nullToDoc
+        (nullToDoc parentKeyPath)
         (Decode.maybe
             (Decode.oneOf
                 [ Decode.map (encodeMustache parentKeyPath) Decode.string
